@@ -42,8 +42,6 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Helpers
         public static QualpayCheckoutResponse PostCheckoutRequest(QualpayCheckoutRequest checkoutRequest, 
             QualpayCheckoutSettings qualpayCheckoutSettings, ILogger logger)
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
             //create request
             var url = string.Format("{0}checkout", GetQualpayCheckoutServiceUrl(qualpayCheckoutSettings));
             var request = (HttpWebRequest)WebRequest.Create(url);

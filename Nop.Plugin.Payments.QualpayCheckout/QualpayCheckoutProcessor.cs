@@ -28,6 +28,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         private readonly HttpContextBase _httpContext;
         private readonly ICurrencyService _currencyService;
         private readonly IGenericAttributeService _genericAttributeService;
+        private readonly ILocalizationService _localizationService;
         private readonly ILogger _logger;
         private readonly IOrderTotalCalculationService _orderTotalCalculationService;
         private readonly ISettingService _settingService;
@@ -41,6 +42,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         public QualpayCheckoutProcessor(HttpContextBase httpContext,
             ICurrencyService currencyService,
             IGenericAttributeService genericAttributeService,
+            ILocalizationService localizationService,
             ILogger logger,
             IOrderTotalCalculationService orderTotalCalculationService,
             ISettingService settingService,
@@ -50,6 +52,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this._httpContext = httpContext;
             this._currencyService = currencyService;
             this._genericAttributeService = genericAttributeService;
+            this._localizationService = localizationService;
             this._logger = logger;
             this._orderTotalCalculationService = orderTotalCalculationService;
             this._settingService = settingService;
@@ -93,7 +96,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             {
                 Amount = Math.Round(amount, 2),
                 CurrencyIsoCode = 840, //ISO numeric code of USD
-                PurchaseId = postProcessPaymentRequest.Order.Id.ToString(),
+                PurchaseId = postProcessPaymentRequest.Order.CustomOrderNumber,
                 CustomerFirstName = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.FirstName, null),
                 CustomerLastName = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.LastName, null),
                 CustomerEmail = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.Email, null),
@@ -281,6 +284,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint", "Specify your Qualpay Checkout security key.");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox", "Use Sandbox");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint", "Check to enable sandbox (testing environment).");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription", "You will be redirected to Qualpay Checkout to complete the payment");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip", "You will be redirected to Qualpay Checkout to complete the order.");
             
             
@@ -309,6 +313,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip");
 
             base.Uninstall();
@@ -372,6 +377,16 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         public bool SkipPaymentInfo
         {
             get { return false; }
+        }
+        
+        /// <summary>
+        /// Gets a payment method description that will be displayed on checkout pages in the public store
+        /// </summary>
+        public string PaymentMethodDescription
+        {
+            //return description of this payment method to be display on "payment method" checkout step. good practice is to make it localizable
+            //for example, for a redirection payment method, description may be like this: "You will be redirected to PayPal site to complete the payment"
+            get { return _localizationService.GetResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription"); }
         }
 
         #endregion

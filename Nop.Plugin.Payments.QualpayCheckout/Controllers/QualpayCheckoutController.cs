@@ -94,7 +94,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
                 model.AdditionalFeePercentage_OverrideForStore = _settingService.SettingExists(settings, x => x.AdditionalFeePercentage, storeScope);
             }
 
-            return View("~/Plugins/Payments.QualpayCheckout/Views/QualpayCheckout/Configure.cshtml", model);
+            return View("~/Plugins/Payments.QualpayCheckout/Views/Configure.cshtml", model);
         }
 
         [HttpPost]
@@ -138,7 +138,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
         [ChildActionOnly]
         public ActionResult PaymentInfo()
         {
-            return View("~/Plugins/Payments.QualpayCheckout/Views/QualpayCheckout/PaymentInfo.cshtml");
+            return View("~/Plugins/Payments.QualpayCheckout/Views/PaymentInfo.cshtml");
         }
 
         [NonAction]
@@ -164,14 +164,10 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
                 return new HttpStatusCodeResult(HttpStatusCode.OK);
 
             //try to get order for this transaction
-            var orderId = 0;
-            if (!int.TryParse(transaction.PurchaseId, out orderId))
-                return new HttpStatusCodeResult(HttpStatusCode.OK);
-
-            var order = _orderService.GetOrderById(orderId);
+            var order = _orderService.GetOrderByCustomOrderNumber(transaction.PurchaseId);
             if (order == null)
             {
-                _logger.Error(string.Format("Qualpay Checkout IPN error: order with ID {0} not found", transaction.PurchaseId));
+                _logger.Error(string.Format("Qualpay Checkout IPN error: order with number {0} not found", transaction.PurchaseId));
                 return new HttpStatusCodeResult(HttpStatusCode.OK);
             }
 
@@ -180,7 +176,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
             if (!checkoutId.Equals(transaction.CheckoutId, StringComparison.InvariantCulture))
             {
                 _logger.Error(string.Format("Qualpay Checkout IPN error: saved Qualpay checkoutId ({0}) for the order {1} is not match with the received one ({2})", 
-                    checkoutId, order.Id, transaction.CheckoutId));
+                    checkoutId, order.CustomOrderNumber, transaction.CheckoutId));
                 return new HttpStatusCodeResult(HttpStatusCode.OK);
             }
 
