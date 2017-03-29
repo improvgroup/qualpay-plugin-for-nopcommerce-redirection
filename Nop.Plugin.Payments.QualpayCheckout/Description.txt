@@ -1,0 +1,9 @@
+﻿Group: Payment methods
+FriendlyName: Qualpay Checkout
+SystemName: Payments.QualpayCheckout
+Version: 1.0
+SupportedVersions: 3.80
+Author: nopCommerce team
+DisplayOrder: 1
+FileName: Nop.Plugin.Payments.QualpayCheckout.dll
+Description: This plugin allows paying with Qualpay Checkout
