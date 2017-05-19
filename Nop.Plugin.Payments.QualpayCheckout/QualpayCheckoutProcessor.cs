@@ -101,7 +101,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
                 CustomerLastName = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.LastName, null),
                 CustomerEmail = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.Email, null),
                 //set billing address, max length is 20
-                BllingAddress = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.Address1.Substring(0, 20), null),
+                BllingAddress = postProcessPaymentRequest.Order.BillingAddress.Return(address => CommonHelper.EnsureMaximumLength(address.Address1, 20), null),
                 BllingCity = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.City, null),
                 BllingState = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.StateProvince.Return(state => state.Abbreviation, null), null),
                 BllingZip = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.ZipPostalCode, null),

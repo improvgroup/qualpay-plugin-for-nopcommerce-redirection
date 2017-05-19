@@ -1,7 +1,7 @@
 ﻿Group: Payment methods
 FriendlyName: Qualpay Checkout
 SystemName: Payments.QualpayCheckout
-Version: 1.11
+Version: 1.12
 SupportedVersions: 3.90
 Author: nopCommerce team
 DisplayOrder: 1
