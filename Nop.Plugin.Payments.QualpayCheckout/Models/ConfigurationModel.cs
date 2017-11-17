@@ -1,6 +1,5 @@
-﻿using System.Web.Mvc;
-using Nop.Web.Framework;
-using Nop.Web.Framework.Mvc;
+﻿using Nop.Web.Framework.Mvc.ModelBinding;
+using Nop.Web.Framework.Mvc.Models;
 
 namespace Nop.Plugin.Payments.QualpayCheckout.Models
 {
@@ -11,7 +10,6 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Models
         [NopResourceDisplayName("Plugins.Payments.QualpayCheckout.Fields.MerchantId")]
         public string MerchantId { get; set; }
 
-        [AllowHtml]
         [NopResourceDisplayName("Plugins.Payments.QualpayCheckout.Fields.SecurityKey")]
         public string SecurityKey { get; set; }
         public bool SecurityKey_OverrideForStore { get; set; }

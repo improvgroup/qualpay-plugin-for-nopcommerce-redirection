@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Web;
-using System.Web.Routing;
+using Microsoft.AspNetCore.Http;
 using Nop.Core;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Plugins;
@@ -25,7 +24,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
     {
         #region Fields
 
-        private readonly HttpContextBase _httpContext;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ICurrencyService _currencyService;
         private readonly IGenericAttributeService _genericAttributeService;
         private readonly ILocalizationService _localizationService;
@@ -39,7 +38,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
 
         #region Ctor
 
-        public QualpayCheckoutProcessor(HttpContextBase httpContext,
+        public QualpayCheckoutProcessor(IHttpContextAccessor httpContextAccessor,
             ICurrencyService currencyService,
             IGenericAttributeService genericAttributeService,
             ILocalizationService localizationService,
@@ -49,7 +48,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             IWebHelper webHelper,
             QualpayCheckoutSettings qualpayCheckoutSettings)
         {
-            this._httpContext = httpContext;
+            this._httpContextAccessor = httpContextAccessor;
             this._currencyService = currencyService;
             this._genericAttributeService = genericAttributeService;
             this._localizationService = localizationService;
@@ -95,27 +94,28 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             var checkoutRequest = new QualpayCheckoutRequest
             {
                 Amount = Math.Round(amount, 2),
-                CurrencyIsoCode = 840, //ISO numeric code of USD
+                //ISO numeric code of USD
+                CurrencyIsoCode = 840,
                 PurchaseId = postProcessPaymentRequest.Order.CustomOrderNumber,
-                CustomerFirstName = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.FirstName, null),
-                CustomerLastName = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.LastName, null),
-                CustomerEmail = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.Email, null),
+                CustomerFirstName = postProcessPaymentRequest.Order.BillingAddress?.FirstName,
+                CustomerLastName = postProcessPaymentRequest.Order.BillingAddress?.LastName,
+                CustomerEmail = postProcessPaymentRequest.Order.BillingAddress?.Email,
                 //set billing address, max length is 20
-                BllingAddress = postProcessPaymentRequest.Order.BillingAddress.Return(address => CommonHelper.EnsureMaximumLength(address.Address1, 20), null),
-                BllingCity = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.City, null),
-                BllingState = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.StateProvince.Return(state => state.Abbreviation, null), null),
-                BllingZip = postProcessPaymentRequest.Order.BillingAddress.Return(address => address.ZipPostalCode, null),
-                
-            };
-            checkoutRequest.Preferences = new Preferences
-            {
-                AllowPartialPayments = false,
-                EnableEmailReceipts = _qualpayCheckoutSettings.EnableEmailReceipts,
-                ExpirationTime = 1200, //20 minutes
-                RequestType = RequestType.Sale,
-                SuccessUrl = string.Format("{0}checkout/completed/{1}", storeLocation, postProcessPaymentRequest.Order.Id),
-                FailureUrl = string.Format("{0}orderdetails/{1}", storeLocation, postProcessPaymentRequest.Order.Id),
-                NotificationUrl = string.Format("{0}Plugins/QualpayCheckout/IPN", storeLocation)
+                BllingAddress = CommonHelper.EnsureMaximumLength(postProcessPaymentRequest.Order.BillingAddress?.Address1, 20),
+                BllingCity = postProcessPaymentRequest.Order.BillingAddress?.City,
+                BllingState = postProcessPaymentRequest.Order.BillingAddress?.StateProvince?.Abbreviation,
+                BllingZip = postProcessPaymentRequest.Order.BillingAddress?.ZipPostalCode,
+                Preferences = new Preferences
+                {
+                    AllowPartialPayments = false,
+                    EnableEmailReceipts = _qualpayCheckoutSettings.EnableEmailReceipts,
+                    //20 minutes
+                    ExpirationTime = 1200, 
+                    RequestType = RequestType.Sale,
+                    SuccessUrl = $"{storeLocation}checkout/completed/{postProcessPaymentRequest.Order.Id}",
+                    FailureUrl = $"{storeLocation}orderdetails/{postProcessPaymentRequest.Order.Id}",
+                    NotificationUrl = $"{storeLocation}Plugins/QualpayCheckout/IPN"
+                }
             };
 
             //get checkout link
@@ -126,10 +126,10 @@ namespace Nop.Plugin.Payments.QualpayCheckout
                 _genericAttributeService.SaveAttribute(postProcessPaymentRequest.Order, "QualpayCheckoutId", checkoutResponse.Details.CheckoutId);
 
                 //redirect to Qualpay Checkout
-                _httpContext.Response.Redirect(checkoutResponse.Details.CheckoutLink);
+                _httpContextAccessor.HttpContext.Response.Redirect(checkoutResponse.Details.CheckoutLink);
             }
             else
-                _httpContext.Response.Redirect(string.Format("{0}orderdetails/{1}", storeLocation, postProcessPaymentRequest.Order.Id));
+                _httpContextAccessor.HttpContext.Response.Redirect($"{storeLocation}orderdetails/{postProcessPaymentRequest.Order.Id}");
         }
 
         /// <summary>
@@ -216,7 +216,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         public bool CanRePostProcessPayment(Order order)
         {
             if (order == null)
-                throw new ArgumentNullException("order");
+                throw new ArgumentNullException(nameof(order));
             
             //let's ensure that at least 5 seconds passed after order is placed
             //P.S. there's no any particular reason for that. we just do it
@@ -226,30 +226,24 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             return true;
         }
 
-        /// <summary>
-        /// Gets a route for provider configuration
-        /// </summary>
-        /// <param name="actionName">Action name</param>
-        /// <param name="controllerName">Controller name</param>
-        /// <param name="routeValues">Route values</param>
-        public void GetConfigurationRoute(out string actionName, out string controllerName, out RouteValueDictionary routeValues)
+        public override string GetConfigurationPageUrl()
         {
-            actionName = "Configure";
-            controllerName = "QualpayCheckout";
-            routeValues = new RouteValueDictionary { { "Namespaces", "Nop.Plugin.Payments.QualpayCheckout.Controllers" }, { "area", null } };
+            return $"{_webHelper.GetStoreLocation()}Admin/QualpayCheckout/Configure";
         }
 
-        /// <summary>
-        /// Gets a route for payment info
-        /// </summary>
-        /// <param name="actionName">Action name</param>
-        /// <param name="controllerName">Controller name</param>
-        /// <param name="routeValues">Route values</param>
-        public void GetPaymentInfoRoute(out string actionName, out string controllerName, out RouteValueDictionary routeValues)
+        public void GetPublicViewComponent(out string viewComponentName)
         {
-            actionName = "PaymentInfo";
-            controllerName = "QualpayCheckout";
-            routeValues = new RouteValueDictionary { { "Namespaces", "Nop.Plugin.Payments.QualpayCheckout.Controllers" }, { "area", null } };
+            viewComponentName = "QualpayCheckout";
+        }
+        
+        public IList<string> ValidatePaymentForm(IFormCollection form)
+        {
+            return new List<string>();
+        }
+
+        public ProcessPaymentRequest GetPaymentInfo(IFormCollection form)
+        {
+            return new ProcessPaymentRequest();
         }
 
         /// <summary>

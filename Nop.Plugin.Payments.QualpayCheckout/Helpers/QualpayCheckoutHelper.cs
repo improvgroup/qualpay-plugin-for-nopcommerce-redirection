@@ -2,7 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Text;
-using System.Web;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using Nop.Plugin.Payments.QualpayCheckout.Domain;
 using Nop.Services.Logging;
@@ -43,16 +43,16 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Helpers
             QualpayCheckoutSettings qualpayCheckoutSettings, ILogger logger)
         {
             //create request
-            var url = string.Format("{0}checkout", GetQualpayCheckoutServiceUrl(qualpayCheckoutSettings));
+            var url = $"{GetQualpayCheckoutServiceUrl(qualpayCheckoutSettings)}checkout";
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
             request.ContentType = "application/json; charset=utf-8";
             request.Accept = "application/json";
 
             //set authentication
-            var login = string.Format("{0}:{1}", qualpayCheckoutSettings.MerchantId, qualpayCheckoutSettings.SecurityKey);
+            var login = $"{qualpayCheckoutSettings.MerchantId}:{qualpayCheckoutSettings.SecurityKey}";
             var authorization = Convert.ToBase64String(Encoding.UTF8.GetBytes(login));
-            request.Headers.Add(HttpRequestHeader.Authorization, string.Format("Basic {0}", authorization));
+            request.Headers.Add(HttpRequestHeader.Authorization, $"Basic {authorization}");
 
             //set post data
             var postData = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(checkoutRequest));
@@ -82,7 +82,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Helpers
                     {
                         //log errors
                         var response = streamReader.ReadToEnd();
-                        logger.Error(string.Format("Qualpay Checkout error: {0}", response), ex);
+                        logger.Error($"Qualpay Checkout error: {response}", ex);
 
                         return JsonConvert.DeserializeObject<QualpayCheckoutResponse>(response);
                     }
@@ -107,12 +107,12 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Helpers
         /// <param name="logger">Logger</param>
         /// <param name="transactionString">String representation of transaction</param>
         /// <returns>Transaction</returns>
-        public static Transaction GetTransaction(HttpContextBase httpContext, ILogger logger, out string transactionString)
+        public static Transaction GetTransaction(HttpContext httpContext, ILogger logger, out string transactionString)
         {
             //get transaction from request
             try
             {
-                using (var streamReader = new StreamReader(httpContext.Request.InputStream))
+                using (var streamReader = new StreamReader(httpContext.Request.Body))
                 {
                     transactionString = streamReader.ReadToEnd();
                     return JsonConvert.DeserializeObject<Transaction>(transactionString);
