@@ -2,10 +2,10 @@
 using Microsoft.AspNetCore.Routing;
 using Nop.Web.Framework.Mvc.Routing;
 
-namespace Nop.Plugin.Payments.QualpayCheckout
+namespace Nop.Plugin.Payments.QualpayCheckout.Infrastructure
 {
     /// <summary>
-    /// Represents custom route provider
+    /// Represents plugin route provider
     /// </summary>
     public partial class RouteProvider : IRouteProvider
     {
@@ -15,14 +15,13 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         /// <param name="routeBuilder">Route builder</param>
         public void RegisterRoutes(IRouteBuilder routeBuilder)
         {
-            //IPN
-            routeBuilder.MapRoute("Plugin.Payments.QualpayCheckout.IPN",
-                 "Plugins/QualpayCheckout/IPN",
-                 new { controller = "QualpayCheckout", action = "IPNHandler" });
+            //add route to the IPN handler
+            routeBuilder.MapRoute(QualpayCheckoutDefaults.IpnRouteName, "Plugins/QualpayCheckout/IPN/",
+                new { controller = "Ipn", action = "IpnHandler" });
         }
 
         /// <summary>
-        /// Gets or sets the priority
+        /// Gets a priority of route provider
         /// </summary>
         public int Priority
         {

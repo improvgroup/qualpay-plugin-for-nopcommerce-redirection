@@ -1,76 +1,50 @@
-﻿using System;
-using System.Net;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
-using Nop.Core.Domain.Orders;
-using Nop.Plugin.Payments.QualpayCheckout.Helpers;
 using Nop.Plugin.Payments.QualpayCheckout.Models;
-using Nop.Services.Common;
+using Nop.Plugin.Payments.QualpayCheckout.Services;
 using Nop.Services.Configuration;
-using Nop.Services.Directory;
 using Nop.Services.Localization;
-using Nop.Services.Logging;
-using Nop.Services.Orders;
 using Nop.Services.Security;
 using Nop.Services.Stores;
-using Nop.Web.Framework;
+using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework.Controllers;
-using Nop.Web.Framework.Mvc.Filters;
 
 namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
 {
-    public class QualpayCheckoutController : BasePaymentController
+    public class QualpayCheckoutController : BaseAdminController
     {
         #region Fields
 
-        private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly ICurrencyService _currencyService;
-        private readonly IGenericAttributeService _genericAttributeService;
         private readonly ILocalizationService _localizationService;
-        private readonly ILogger _logger;
-        private readonly IOrderProcessingService _orderProcessingService;
-        private readonly IOrderService _orderService;
+        private readonly IPermissionService _permissionService;
         private readonly ISettingService _settingService;
         private readonly IStoreService _storeService;
         private readonly IWorkContext _workContext;
-        private readonly IPermissionService _permissionService;
+        private readonly QualpayCheckoutManager _qualpayCheckoutManager;
 
         #endregion
 
         #region Ctor
 
-        public QualpayCheckoutController(IHttpContextAccessor httpContextAccessor,
-            ICurrencyService currencyService,
-            IGenericAttributeService genericAttributeService,
-            ILocalizationService localizationService,
-            ILogger logger,
-            IOrderProcessingService orderProcessingService,
-            IOrderService orderService,
+        public QualpayCheckoutController(ILocalizationService localizationService,
+            IPermissionService permissionService,
             ISettingService settingService,
             IStoreService storeService,
             IWorkContext workContext,
-            IPermissionService permissionService)
+            QualpayCheckoutManager qualpayCheckoutManager)
         {
-            this._httpContextAccessor = httpContextAccessor;
-            this._currencyService = currencyService;
-            this._genericAttributeService = genericAttributeService;
             this._localizationService = localizationService;
-            this._logger = logger;
-            this._orderProcessingService = orderProcessingService;
-            this._orderService = orderService;
+            this._permissionService = permissionService;
             this._settingService = settingService;
             this._storeService = storeService;
             this._workContext = workContext;
-            this._permissionService = permissionService;
+            this._qualpayCheckoutManager = qualpayCheckoutManager;
         }
 
         #endregion
 
         #region Methods
 
-        [AuthorizeAdmin]
-        [Area(AreaNames.Admin)]
         public IActionResult Configure()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
@@ -84,6 +58,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
             var model = new ConfigurationModel
             {
                 MerchantId = settings.MerchantId,
+                MerchantEmail = settings.MerchantEmail,
                 SecurityKey = settings.SecurityKey,
                 EnableEmailReceipts = settings.EnableEmailReceipts,
                 UseSandbox = settings.UseSandbox,
@@ -104,9 +79,8 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
             return View("~/Plugins/Payments.QualpayCheckout/Views/Configure.cshtml", model);
         }
 
-        [HttpPost]
-        [AuthorizeAdmin]
-        [Area(AreaNames.Admin)]
+        [HttpPost, ActionName("Configure")]
+        [FormValueRequired("save")]
         public IActionResult Configure(ConfigurationModel model)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
@@ -145,60 +119,35 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
             return Configure();
         }
 
-        [HttpPost]
-        public IActionResult IPNHandler()
+        [HttpPost, ActionName("Configure")]
+        [FormValueRequired("subscribe")]
+        public IActionResult Subscribe(ConfigurationModel model)
         {
-            //get Qualpay transaction 
-            var transaction = QualpayCheckoutHelper.GetTransaction(_httpContextAccessor.HttpContext, _logger, out string transactionString);
-            if (transaction == null)
-                 return new StatusCodeResult((int)HttpStatusCode.OK);
+            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePaymentMethods))
+                return AccessDeniedView();
 
-            //try to get order for this transaction
-            var order = _orderService.GetOrderByCustomOrderNumber(transaction.PurchaseId);
-            if (order == null)
+            //load settings
+            var settings = _settingService.LoadSetting<QualpayCheckoutSettings>();
+            if (settings.MerchantEmail == model.MerchantEmail)
+                return Configure();
+
+            //try to subscribe/unsubscribe
+            var successfullySubscribed = _qualpayCheckoutManager.SubscribeToQualpay(model.MerchantEmail);
+            if (successfullySubscribed)
             {
-                _logger.Error($"Qualpay Checkout IPN error: order with number {transaction.PurchaseId} not found");
-                 return new StatusCodeResult((int)HttpStatusCode.OK);
+                //save settings and display success notification
+                settings.MerchantEmail = model.MerchantEmail;
+                _settingService.SaveSetting(settings);
+
+                var message = !string.IsNullOrEmpty(model.MerchantEmail)
+                    ? _localizationService.GetResource("Plugins.Payments.QualpayCheckout.Subscribe.Success")
+                    : _localizationService.GetResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success");
+                SuccessNotification(message);
             }
+            else
+                ErrorNotification("Plugins.Payments.QualpayCheckout.Subscribe.Error");
 
-            //validate received transaction by comparing some of data
-            var checkoutId = order.GetAttribute<string>("QualpayCheckoutId", _genericAttributeService) ?? string.Empty;
-            if (!checkoutId.Equals(transaction.CheckoutId, StringComparison.InvariantCulture))
-            {
-                _logger.Error($"Qualpay Checkout IPN error: saved Qualpay checkoutId ({checkoutId}) for the order {order.CustomOrderNumber} is not match with the received one ({transaction.CheckoutId})");
-                 return new StatusCodeResult((int)HttpStatusCode.OK);
-            }
-
-            //add order note
-            order.OrderNotes.Add(new OrderNote()
-            {
-                Note = transactionString,
-                DisplayToCustomer = false,
-                CreatedOnUtc = DateTime.UtcNow
-            });
-            _orderService.UpdateOrder(order);
-
-            //compare amounts
-            var amount = _currencyService.ConvertCurrency(order.OrderTotal, order.CurrencyRate);
-            if (Math.Round(amount, 2) != Math.Round(transaction.Amount, 2))
-                 return new StatusCodeResult((int)HttpStatusCode.OK);
-
-            //all is ok, so paid order
-            if (_orderProcessingService.CanMarkOrderAsPaid(order))
-            {
-                //set payment details
-                order.AuthorizationTransactionCode = transaction.AuthorizationCode;
-                order.CaptureTransactionId = transaction.TransactionId;
-                order.CaptureTransactionResult = transaction.ResponseMessage;
-                _orderService.UpdateOrder(order);
-
-                _orderProcessingService.MarkOrderAsPaid(order);
-            }
-
-            //delete validation data
-            _genericAttributeService.SaveAttribute<string>(order, "QualpayCheckoutId", null);
-
-             return new StatusCodeResult((int)HttpStatusCode.OK);
+            return Configure();
         }
 
         #endregion

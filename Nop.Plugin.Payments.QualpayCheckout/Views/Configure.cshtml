@@ -1,8 +1,8 @@
-﻿@{
+﻿@model Nop.Plugin.Payments.QualpayCheckout.Models.ConfigurationModel
+
+@{
     Layout = "_ConfigurePlugin";
 }
-@model ConfigurationModel
-@using Nop.Plugin.Payments.QualpayCheckout.Models;
 
 @await Component.InvokeAsync("StoreScopeConfiguration")
 
@@ -11,16 +11,38 @@
         <div class="panel panel-default">
             <div class="panel-body">
                 <p>
+                    Please enter your email to receive an information about special offers from Qualpay
+                </p>
+                <div class="form-group">
+                    <div class="col-md-3">
+                        <nop-label asp-for="MerchantEmail" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="MerchantEmail" />
+                        <span asp-validation-for="MerchantEmail"></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-9 col-md-offset-3">
+                        <input type="submit" name="subscribe" class="btn btn-primary" value="@T("Plugins.Payments.QualpayCheckout.Subscribe")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <p>
                     For plugin configuration follow these steps:<br />
                     <br />
-                    1. <a href="https://www.qualpay.com/" target="_blank">Create Qualpay account</a><br />
+                    1. <a href="http://www.qualpay.com/nopcommerce" target="_blank">Create Qualpay account</a><br />
                     2. Log in at the <a href="https://app.qualpay.com/" target="_blank">production service</a>
-                    or at the <a href="https://app-test.qualpay.com/ target=" _blank"> sandbox service</a><br />
-                    3. Go to the 'Administration' -> 'Platform API Security Keys' and choose your profile<br />
-                    4. Enable 'Qualpay Checkout', and then click 'Get Key'<br />
-                    5. Fill in your Qualpay Checkout account details below<br />
+                    or at the <a href="https://app-test.qualpay.com/" target="_blank"> sandbox service</a><br />
+                    3. Go to the 'Administration' -> 'API Security Keys' and find Security Key<br />
+                    4. Fill in your Qualpay Checkout credentials below<br />
+                    5. Ensure you enable access to the Checkout API in your Qualpay account -> 'Administration' -> 'API Security Keys' -> Manage Access<br />
+                    6. Save<br />
                     <br />
-                    <em>Note: Qualpay Checkout supports only USD currency, ensure that you have correctly configured exchange rate from your primary store currency to the USD currency.</em><br />
+                    <em>Note: Qualpay Checkout supports only USD currency, so ensure that you have configured the USD as your primary store currency.</em><br />
                 </p>
                 <div class="form-group">
                     <div class="col-md-3">
@@ -83,9 +105,7 @@
                 </div>
                 <div class="form-group">
                     <div class="col-md-9 col-md-offset-3">
-                        <button type="submit" class="btn btn-primary">
-                            @T("Admin.Common.Save")
-                        </button>
+                        <input type="submit" name="save" class="btn btn-primary" value="@T("Admin.Common.Save")" />
                     </div>
                 </div>
             </div>

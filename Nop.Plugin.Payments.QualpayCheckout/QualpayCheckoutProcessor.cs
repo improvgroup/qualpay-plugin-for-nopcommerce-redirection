@@ -2,16 +2,15 @@ using System;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
 using Nop.Core;
+using Nop.Core.Domain.Directory;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Plugins;
-using Nop.Plugin.Payments.QualpayCheckout.Controllers;
 using Nop.Plugin.Payments.QualpayCheckout.Domain;
-using Nop.Plugin.Payments.QualpayCheckout.Helpers;
+using Nop.Plugin.Payments.QualpayCheckout.Services;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Directory;
 using Nop.Services.Localization;
-using Nop.Services.Logging;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
 
@@ -24,38 +23,41 @@ namespace Nop.Plugin.Payments.QualpayCheckout
     {
         #region Fields
 
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly CurrencySettings _currencySettings;
         private readonly ICurrencyService _currencyService;
         private readonly IGenericAttributeService _genericAttributeService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILocalizationService _localizationService;
-        private readonly ILogger _logger;
         private readonly IOrderTotalCalculationService _orderTotalCalculationService;
         private readonly ISettingService _settingService;
         private readonly IWebHelper _webHelper;
+        private readonly QualpayCheckoutManager _qualpayCheckoutManager;
         private readonly QualpayCheckoutSettings _qualpayCheckoutSettings;
 
         #endregion
 
         #region Ctor
 
-        public QualpayCheckoutProcessor(IHttpContextAccessor httpContextAccessor,
+        public QualpayCheckoutProcessor(CurrencySettings currencySettings,
             ICurrencyService currencyService,
             IGenericAttributeService genericAttributeService,
+            IHttpContextAccessor httpContextAccessor,
             ILocalizationService localizationService,
-            ILogger logger,
             IOrderTotalCalculationService orderTotalCalculationService,
             ISettingService settingService,
             IWebHelper webHelper,
+            QualpayCheckoutManager qualpayCheckoutManager,
             QualpayCheckoutSettings qualpayCheckoutSettings)
         {
-            this._httpContextAccessor = httpContextAccessor;
+            this._currencySettings = currencySettings;
             this._currencyService = currencyService;
             this._genericAttributeService = genericAttributeService;
+            this._httpContextAccessor = httpContextAccessor;
             this._localizationService = localizationService;
-            this._logger = logger;
             this._orderTotalCalculationService = orderTotalCalculationService;
             this._settingService = settingService;
             this._webHelper = webHelper;
+            this._qualpayCheckoutManager = qualpayCheckoutManager;
             this._qualpayCheckoutSettings = qualpayCheckoutSettings;
         }
 
@@ -79,28 +81,23 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         /// <param name="postProcessPaymentRequest">Payment info required for an order processing</param>
         public void PostProcessPayment(PostProcessPaymentRequest postProcessPaymentRequest)
         {
-            //get USD currency
-            var usdCurrency = _currencyService.GetCurrencyByCode("USD");
-            if (usdCurrency == null)
-                throw new NopException("USD currency could not be loaded");
-
-            //get order amount in USD currency
-            var amount = _currencyService.ConvertFromPrimaryStoreCurrency(postProcessPaymentRequest.Order.OrderTotal, usdCurrency);
-
+            //Qualpay Checkout supports only USD currency
+            var primaryStoreCurrency = _currencyService.GetCurrencyById(_currencySettings.PrimaryStoreCurrencyId);
+            if (!primaryStoreCurrency.CurrencyCode.Equals("USD", StringComparison.InvariantCultureIgnoreCase))
+                throw new NopException("USD is not a primary store currency");
+            
             //store location
             var storeLocation = _webHelper.GetStoreLocation();
 
             //create checkout request
             var checkoutRequest = new QualpayCheckoutRequest
             {
-                Amount = Math.Round(amount, 2),
-                //ISO numeric code of USD
-                CurrencyIsoCode = 840,
+                Amount = Math.Round(postProcessPaymentRequest.Order.OrderTotal, 2),
+                CurrencyIsoCode = QualpayCheckoutDefaults.UsdNumericIsoCode,
                 PurchaseId = postProcessPaymentRequest.Order.CustomOrderNumber,
                 CustomerFirstName = postProcessPaymentRequest.Order.BillingAddress?.FirstName,
                 CustomerLastName = postProcessPaymentRequest.Order.BillingAddress?.LastName,
                 CustomerEmail = postProcessPaymentRequest.Order.BillingAddress?.Email,
-                //set billing address, max length is 20
                 BllingAddress = CommonHelper.EnsureMaximumLength(postProcessPaymentRequest.Order.BillingAddress?.Address1, 20),
                 BllingCity = postProcessPaymentRequest.Order.BillingAddress?.City,
                 BllingState = postProcessPaymentRequest.Order.BillingAddress?.StateProvince?.Abbreviation,
@@ -109,8 +106,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
                 {
                     AllowPartialPayments = false,
                     EnableEmailReceipts = _qualpayCheckoutSettings.EnableEmailReceipts,
-                    //20 minutes
-                    ExpirationTime = 1200, 
+                    ExpirationTime = 1200,
                     RequestType = RequestType.Sale,
                     SuccessUrl = $"{storeLocation}checkout/completed/{postProcessPaymentRequest.Order.Id}",
                     FailureUrl = $"{storeLocation}orderdetails/{postProcessPaymentRequest.Order.Id}",
@@ -119,17 +115,21 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             };
 
             //get checkout link
-            var checkoutResponse = QualpayCheckoutHelper.PostCheckoutRequest(checkoutRequest, _qualpayCheckoutSettings, _logger);
-            if (checkoutResponse != null && checkoutResponse.ResponseCode == ResponseCode.OK && checkoutResponse.Details != null)
+            var redirectUrl = string.Empty;
+            var checkoutResponse = _qualpayCheckoutManager.Checkout(checkoutRequest);
+            if (checkoutResponse != null)
             {
-                //save some of data for the further validation
-                _genericAttributeService.SaveAttribute(postProcessPaymentRequest.Order, "QualpayCheckoutId", checkoutResponse.Details.CheckoutId);
+                //save chekout id for the further validation
+                _genericAttributeService
+                    .SaveAttribute(postProcessPaymentRequest.Order, QualpayCheckoutDefaults.CheckoutIdAttribute, checkoutResponse.CheckoutId);
 
                 //redirect to Qualpay Checkout
-                _httpContextAccessor.HttpContext.Response.Redirect(checkoutResponse.Details.CheckoutLink);
+                redirectUrl = checkoutResponse.CheckoutLink;
             }
             else
-                _httpContextAccessor.HttpContext.Response.Redirect($"{storeLocation}orderdetails/{postProcessPaymentRequest.Order.Id}");
+                redirectUrl = $"{storeLocation}orderdetails/{postProcessPaymentRequest.Order.Id}";
+
+            _httpContextAccessor.HttpContext.Response.Redirect(redirectUrl);
         }
 
         /// <summary>
@@ -217,7 +217,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         {
             if (order == null)
                 throw new ArgumentNullException(nameof(order));
-            
+
             //let's ensure that at least 5 seconds passed after order is placed
             //P.S. there's no any particular reason for that. we just do it
             if ((DateTime.UtcNow - order.CreatedOnUtc).TotalSeconds < 5)
@@ -226,33 +226,41 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             return true;
         }
 
-        public override string GetConfigurationPageUrl()
-        {
-            return $"{_webHelper.GetStoreLocation()}Admin/QualpayCheckout/Configure";
-        }
-
-        public void GetPublicViewComponent(out string viewComponentName)
-        {
-            viewComponentName = "QualpayCheckout";
-        }
-        
+        /// <summary>
+        /// Validate payment form
+        /// </summary>
+        /// <param name="form">The parsed form values</param>
+        /// <returns>List of validating errors</returns>
         public IList<string> ValidatePaymentForm(IFormCollection form)
         {
             return new List<string>();
         }
 
+        /// <summary>
+        /// Get payment information
+        /// </summary>
+        /// <param name="form">The parsed form values</param>
+        /// <returns>Payment info holder</returns>
         public ProcessPaymentRequest GetPaymentInfo(IFormCollection form)
         {
             return new ProcessPaymentRequest();
         }
 
         /// <summary>
-        /// Get type of the controller
+        /// Gets a configuration page URL
         /// </summary>
-        /// <returns>Controller type</returns>
-        public Type GetControllerType()
+        public override string GetConfigurationPageUrl()
         {
-            return typeof(QualpayCheckoutController);
+            return $"{_webHelper.GetStoreLocation()}Admin/QualpayCheckout/Configure";
+        }
+
+        /// <summary>
+        /// Gets a view component for displaying plugin in public store ("payment info" checkout step)
+        /// </summary>
+        /// <param name="viewComponentName">View component name</param>
+        public void GetPublicViewComponent(out string viewComponentName)
+        {
+            viewComponentName = QualpayCheckoutDefaults.ViewComponentName;
         }
 
         /// <summary>
@@ -273,6 +281,8 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint", "Determines whether to apply a percentage additional fee to the order total. If not enabled, a fixed value is used.");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts", "Email receipts");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint", "Check for sending the transaction receipts from Qualpay to the customers.");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail", "Email");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint", "Enter your email to subscribe to Qualpay news.");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId", "Merchant ID");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint", "Specify your Qualpay merchant identifier.");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey", "Security key");
@@ -281,8 +291,10 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint", "Check to enable sandbox (testing environment).");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription", "You will be redirected to Qualpay Checkout to complete the payment");
             this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip", "You will be redirected to Qualpay Checkout to complete the order.");
-            
-            
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe", "Stay informed");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error", "An error has occurred, details in the log");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success", "You have subscribed to Qualpay news");
+            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success", "You have unsubscribed from Qualpay news");
 
             base.Install();
         }
@@ -302,6 +314,8 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey");
@@ -310,6 +324,10 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription");
             this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success");
+            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success");
 
             base.Uninstall();
         }
@@ -373,7 +391,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         {
             get { return false; }
         }
-        
+
         /// <summary>
         /// Gets a payment method description that will be displayed on checkout pages in the public store
         /// </summary>
