@@ -11,7 +11,6 @@ using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Directory;
 using Nop.Services.Localization;
-using Nop.Services.Orders;
 using Nop.Services.Payments;
 
 namespace Nop.Plugin.Payments.QualpayCheckout
@@ -28,7 +27,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         private readonly IGenericAttributeService _genericAttributeService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILocalizationService _localizationService;
-        private readonly IOrderTotalCalculationService _orderTotalCalculationService;
+        private readonly IPaymentService _paymentService;
         private readonly ISettingService _settingService;
         private readonly IWebHelper _webHelper;
         private readonly QualpayCheckoutManager _qualpayCheckoutManager;
@@ -43,7 +42,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             IGenericAttributeService genericAttributeService,
             IHttpContextAccessor httpContextAccessor,
             ILocalizationService localizationService,
-            IOrderTotalCalculationService orderTotalCalculationService,
+            IPaymentService paymentService,
             ISettingService settingService,
             IWebHelper webHelper,
             QualpayCheckoutManager qualpayCheckoutManager,
@@ -54,7 +53,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             this._genericAttributeService = genericAttributeService;
             this._httpContextAccessor = httpContextAccessor;
             this._localizationService = localizationService;
-            this._orderTotalCalculationService = orderTotalCalculationService;
+            this._paymentService = paymentService;
             this._settingService = settingService;
             this._webHelper = webHelper;
             this._qualpayCheckoutManager = qualpayCheckoutManager;
@@ -152,7 +151,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         /// <returns>Additional handling fee</returns>
         public decimal GetAdditionalHandlingFee(IList<ShoppingCartItem> cart)
         {
-            var result = this.CalculateAdditionalFee(_orderTotalCalculationService, cart,
+            var result = _paymentService.CalculateAdditionalFee(cart,
                 _qualpayCheckoutSettings.AdditionalFee, _qualpayCheckoutSettings.AdditionalFeePercentage);
 
             return result;
@@ -258,9 +257,9 @@ namespace Nop.Plugin.Payments.QualpayCheckout
         /// Gets a view component for displaying plugin in public store ("payment info" checkout step)
         /// </summary>
         /// <param name="viewComponentName">View component name</param>
-        public void GetPublicViewComponent(out string viewComponentName)
+        public string GetPublicViewComponentName()
         {
-            viewComponentName = QualpayCheckoutDefaults.ViewComponentName;
+            return QualpayCheckoutDefaults.ViewComponentName;
         }
 
         /// <summary>
@@ -275,26 +274,26 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             });
 
             //locales
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee", "Additional fee");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee.Hint", "Enter additional fee to charge your customers.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage", "Additional fee. Use percentage");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint", "Determines whether to apply a percentage additional fee to the order total. If not enabled, a fixed value is used.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts", "Email receipts");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint", "Check for sending the transaction receipts from Qualpay to the customers.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail", "Email");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint", "Enter your email to subscribe to Qualpay news.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId", "Merchant ID");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint", "Specify your Qualpay merchant identifier.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey", "Security key");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint", "Specify your Qualpay Checkout security key.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox", "Use Sandbox");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint", "Check to enable sandbox (testing environment).");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription", "You will be redirected to Qualpay Checkout to complete the payment");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip", "You will be redirected to Qualpay Checkout to complete the order.");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe", "Stay informed");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error", "An error has occurred, details in the log");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success", "You have subscribed to Qualpay news");
-            this.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success", "You have unsubscribed from Qualpay news");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee", "Additional fee");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee.Hint", "Enter additional fee to charge your customers.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage", "Additional fee. Use percentage");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint", "Determines whether to apply a percentage additional fee to the order total. If not enabled, a fixed value is used.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts", "Email receipts");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint", "Check for sending the transaction receipts from Qualpay to the customers.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail", "Email");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint", "Enter your email to subscribe to Qualpay news.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId", "Merchant ID");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint", "Specify your Qualpay merchant identifier.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey", "Security key");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint", "Specify your Qualpay Checkout security key.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox", "Use Sandbox");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint", "Check to enable sandbox (testing environment).");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription", "You will be redirected to Qualpay Checkout to complete the payment");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip", "You will be redirected to Qualpay Checkout to complete the order.");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe", "Stay informed");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error", "An error has occurred, details in the log");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success", "You have subscribed to Qualpay news");
+            _localizationService.AddOrUpdatePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success", "You have unsubscribed from Qualpay news");
 
             base.Install();
         }
@@ -308,26 +307,26 @@ namespace Nop.Plugin.Payments.QualpayCheckout
             _settingService.DeleteSetting<QualpayCheckoutSettings>();
 
             //locales
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success");
-            this.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFee.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.AdditionalFeePercentage.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.EnableEmailReceipts.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantEmail.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.MerchantId.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.SecurityKey.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Fields.UseSandbox.Hint");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.PaymentMethodDescription");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.RedirectionTip");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Error");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Subscribe.Success");
+            _localizationService.DeletePluginLocaleResource("Plugins.Payments.QualpayCheckout.Unsubscribe.Success");
 
             base.Uninstall();
         }

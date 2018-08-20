@@ -5,7 +5,6 @@ using Nop.Plugin.Payments.QualpayCheckout.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Security;
-using Nop.Services.Stores;
 using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework.Controllers;
 
@@ -18,8 +17,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
         private readonly ILocalizationService _localizationService;
         private readonly IPermissionService _permissionService;
         private readonly ISettingService _settingService;
-        private readonly IStoreService _storeService;
-        private readonly IWorkContext _workContext;
+        private readonly IStoreContext _storeContext;
         private readonly QualpayCheckoutManager _qualpayCheckoutManager;
 
         #endregion
@@ -29,15 +27,13 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
         public QualpayCheckoutController(ILocalizationService localizationService,
             IPermissionService permissionService,
             ISettingService settingService,
-            IStoreService storeService,
-            IWorkContext workContext,
+            IStoreContext storeContext,
             QualpayCheckoutManager qualpayCheckoutManager)
         {
             this._localizationService = localizationService;
             this._permissionService = permissionService;
             this._settingService = settingService;
-            this._storeService = storeService;
-            this._workContext = workContext;
+            this._storeContext = storeContext;
             this._qualpayCheckoutManager = qualpayCheckoutManager;
         }
 
@@ -51,7 +47,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
                 return AccessDeniedView();
 
             //load settings for a chosen store scope
-            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = _storeContext.ActiveStoreScopeConfiguration;
             var settings = _settingService.LoadSetting<QualpayCheckoutSettings>(storeScope);
 
             //prepare model
@@ -90,7 +86,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
                 return Configure();
 
             //load settings for a chosen store scope
-            var storeScope = GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var storeScope = _storeContext.ActiveStoreScopeConfiguration;
             var settings = _settingService.LoadSetting<QualpayCheckoutSettings>(storeScope);
 
             //save settings

@@ -50,7 +50,7 @@ namespace Nop.Plugin.Payments.QualpayCheckout.Controllers
                 return Ok();
 
             //validate received transaction by comparing some of data
-            var checkoutId = order.GetAttribute<string>(QualpayCheckoutDefaults.CheckoutIdAttribute) ?? string.Empty;
+            var checkoutId =_genericAttributeService.GetAttribute<string>(order, QualpayCheckoutDefaults.CheckoutIdAttribute) ?? string.Empty;
             if (!checkoutId.Equals(transaction.CheckoutId))
                 return Ok();
 
